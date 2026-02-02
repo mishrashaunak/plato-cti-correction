@@ -20,3 +20,27 @@ You can install the required dependencies using pip:
 
 ```bash
 pip install -r requirements.txt
+```
+
+## Usage
+The core logic is contained in cti_model.py. You can import the functions directly into your Python scripts:
+```from cti_model import run_cdm_parallel_cumul
+
+# See demo.py for a complete example of input parameters
+```
+## Citation
+
+If you use this code in your research, please cite the paper:
+
+```bibtex
+@article{mishra2025,
+  title   = {Impact of Charge Transfer Inefficiency on transit light-curves: A correction strategy for PLATO},
+  author  = {Mishra, S. and Samadi, R. and Bérard, D.},
+  journal = {Astronomy \& Astrophysics},
+  eprint={2510.22092},
+  archivePrefix={arXiv},
+  primaryClass= [astro-ph.EP]
+  year    = {2025},
+  note    = {In press}
+}
+```
