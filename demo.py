@@ -1,51 +1,81 @@
 import numpy as np
-from cti_model import run_cdm_parallel_cumul
+from cti_model import run_cdm_parallel_cumul, run_cdm_parallel_cumul_radial_poly
+import time
 
-# 1. Setup Parameters
-# -------------------
-image = np.ones((100, 100)) * 1000.0  # 100x100 image with 1000 electrons flat field
-y0 = 0
-beta = 0.3
-vg = 1.0e-10
-t = 0.005        # Reduced time to make transfer faster/more realistic for testing
-fwc = 200000.0
-vth = 1.0e7
-tr = np.array([1.0e-3])      # 1 trap species (release time)
-sigma = np.array([1.0e-15])  # 1 trap species (cross section)
+def print_verification(name, input_arr, output_arr):
+    """Helper to print results consistently."""
+    print(f"\n--- Verification: {name} ---")
+    diff = input_arr - output_arr
+    max_loss = np.max(diff)
+    total_loss = np.sum(diff)
+    
+    if max_loss > 0:
+        print(f"SUCCESS: CTI applied.")
+        print(f"  Max pixel loss:   {max_loss:.4f} e-")
+        print(f"  Total signal loss: {total_loss:.4f} e-")
+    else:
+        print(f"WARNING: Output identical to input. Check parameters.")
+    
+    # Sanity check
+    assert not np.array_equal(input_arr, output_arr), f"Error: {name} returned exact input!"
 
-# 2. Populate Trap Density
-# ------------------------
-# We add a gradient of traps so the effect varies across the image
-# cnt shape: (4510 rows, 100 cols, 1 species)
-cnt = np.zeros((4510, 100, 1))
-for i in range(4510):
-    cnt[i, :, 0] = i * 10.0  # Increasing trap count down the rows
+def test_standard_cdm():
+    print("1. Running Standard CTI model...")
+    # Parameters
+    image = np.ones((100, 100)) * 1000.0
+    y0 = 0
+    beta = 0.3
+    vg = 1.0e-10
+    t = 0.005
+    fwc = 200000.0
+    vth = 1.0e7
+    tr = np.array([1.0e-3])
+    sigma = np.array([1.0e-15])
+    
+    # Create a gradient trap map
+    cnt = np.zeros((4510, 100, 1))
+    for i in range(4510):
+        cnt[i, :, 0] = i * 10.0
 
-print("Running CTI model (Compiling with Numba, this may take a moment)...")
+    # Run
+    start = time.time()
+    result = run_cdm_parallel_cumul(image, y0, beta, vg, t, fwc, vth, tr, cnt, sigma)
+    end = time.time()
+    print(f"   Execution time: {end - start:.4f}s")
+    
+    print_verification("Standard CDM", image, result)
 
-# 3. Run Model
-# ------------
-result = run_cdm_parallel_cumul(image, y0, beta, vg, t, fwc, vth, tr, cnt, sigma)
+def test_radial_cdm():
+    print("\n2. Running Radial Polynomial CTI model...")
+    # Parameters
+    rows, cols = 100, 100
+    image = np.ones((rows, cols)) * 1000.0
+    colindex = np.arange(cols)
+    y0 = 0
+    beta = 0.3
+    vg = 1.0e-10
+    t = 0.005
+    fwc = 200000.0
+    vth = 1.0e7
+    tr = np.array([1.0e-3])
+    sigma = np.array([1.0e-15])
+    
+    # Radial parameters
+    a = np.array([[0.0, 100.0]]) # Linear increase: 0 + 100*R
+    xc, yc = 2255, 2255
 
-# 4. Verification
-# ---------------
-print("\n--- Verification Results ---")
-print(f"Input Shape:  {image.shape}")
-print(f"Output Shape: {result.shape}")
+    # Run
+    start = time.time()
+    result = run_cdm_parallel_cumul_radial_poly(
+        image, colindex, y0, beta, vg, t, fwc, vth, tr, a, xc, yc, sigma
+    )
+    end = time.time()
+    print(f"   Execution time: {end - start:.4f}s")
+    
+    print_verification("Radial CDM", image, result)
 
-# Check if the image changed
-diff = image - result
-max_loss = np.max(diff)
-total_loss = np.sum(diff)
-
-if max_loss > 0:
-    print(f"SUCCESS: CTI applied. Max pixel signal loss: {max_loss:.4f} e-")
-    print(f"Total signal loss across image: {total_loss:.4f} e-")
-else:
-    print("WARNING: Output identical to input. Check trap density (cnt) or parameters.")
-
-# Simple sanity check: First row should have less trailing (less traps traversed) 
-# than the last row in a parallel readout context if y0=0 implies readout at y=0? 
-# Actually, usually y=0 is readout, so higher rows see more traps.
-# Let's just check that pixels are not identical.
-assert not np.array_equal(image, result), "Error: The model returned the exact input image!"
+if __name__ == "__main__":
+    print("Starting combined verification...\n")
+    test_standard_cdm()
+    test_radial_cdm()
+    print("\nAll tests passed successfully.")
