@@ -1,101 +1,104 @@
 import numpy as np
-import math
-from numba import prange, njit
+from numba import prange,njit
 
-@njit(nogil=True, fastmath=True, cache=True, parallel=True)
+@njit(nogil=True,fastmath=True,cache=True,parallel=True)
 def run_cdm_parallel_cumul(
-    image: np.ndarray,
-    y0: int,
-    beta: float,
-    vg: float,
-    t: float,
-    fwc: float,
-    vth: float,
-    tr: np.ndarray,
-    cnt: np.ndarray,
-    sigma: np.ndarray,
-    ci: bool = False
+  image: np.ndarray,
+  y0: int,
+  beta: float,
+  vg: float,
+  t: float,
+  fwc: float,
+  vth: float,
+  tr: np.ndarray,
+  cnt: np.ndarray,
+  sigma: np.ndarray,
+  ci: bool = False
 ) -> np.ndarray:
-    r"""
-    Run `CDM` in the parallel direction.
-    
-    This version was adapted from the routine run_cdm_parallel() taken from Pyxel 1.10.2 
-    (https://esa.gitlab.io/pyxel/).
-    It accounts for the spatial variation of the traps across the CCD.
-    
-    Parameters
-    ----------
-    image: ndarray
-        Input image.
-    y0: int
-        location of the first row in the CCD.
-    beta: float
-        Electron cloud expansion coefficient beta.
-    vg: float
-        Maximum geometrical volume V_g. Unit: cm^3.
-    t: float
-        Transfer period t (TDI period). Unit: s.
-    fwc: float
-        Full well capacity FWC. Unit: e^-.
-    vth: float
-        Electron thermal velocity.
-    tr: sequence of float
-        Trap release time constants tau_r. Unit: s.
-    cnt: ndarray
-        Cumulated number of traps along the column (i) up to row (j) for the species (k).
-    sigma: sequence of float
-        Trap capture cross section sigma. Unit: cm^2.
-    ci: bool
-        Input frame assumed to contain CI. Default: False
+  r"""
+  Run `CDM` in the parallel direction.
+  
+  This version was adapted from the routine run_cdm_parallel() taken from Pyxel 1.10.2 
+  (https://esa.gitlab.io/pyxel/).
+  It accounts for the spatial variation of the traps across the CCD.
+  
+  For more details about Pyxel see:
+  Arko, M. et al. 2022, in Society of Photo-OpticalInstrumentation Engineers (SPIE) Conference Series, 
+  ol. 12187, Modeling,Systems Engineering, and Project Management for Astronomy X, 
+  ed. G. Z.  660Angeli & P. Dierickx, 1218705
 
-    Returns
-    -------
-    array: ndarray
-        Output array.
-    """
-    array = image.copy() 
-    ydim, xdim = array.shape 
-    kdim_p = cnt.shape[2]
+  Parameters
+  ----------
+  image: ndarray
+    Input image.
+  y0: int
+    location of the first row in the CCD (for instance y0=2000 means that the first row in the 
+    input array corresponds to CCD row of index 2000)
+  beta: float
+    Electron cloud expansion coefficient :math:`\beta`.
+  vg: float
+    Maximum geometrical volume :math:`V_g` that electrons can occupy within a pixel. Unit: :math:`cm^3`.
+  t: float
+    Transfer period :math:`t` (TDI period). Unit: :math:`s`.
+  fwc: float
+    Full well capacity :math:`FWC`. Unit: :math:`e^-`.
+  vth: float
+    Electron thermal velocity.
+  tr: sequence of float
+    Trap release time constants :math:`\tau_r`. Unit: :math:`s`.
+  cnt[4510,nx,ns] : cumulated number of traps along the column (i) up to row (j) for the species (k)
+  sigma: sequence of float
+    Trap capture cross section :math:`\sigma`. Unit: :math:`cm^2`.
+  ci: bool
+	  frame, the input frame assumed to contain CI and it is transferred into the CCD area.
+	  Default: False
 
-    # IMAGING (non-TDI) MODE
-    # Parallel direction
-    no = np.zeros((xdim, kdim_p))
-    alpha_p = t * sigma * vth * fwc**beta / (2.0 * vg)
-    g_p = 2.0 * cnt / fwc**beta
-    
-    for j in prange(xdim):
-        for i in range(ydim):
-            for k in range(kdim_p):
-                nc = 0.0
-                if array[i,j] > 0.01:
-                    if (ci):
-                        if (i+y0 < 4510):
-                            gamma = g_p[4509,j,k] - g_p[i+y0,j,k]
-                        else:
-                            gamma = 0.
-                    else:
-                        if (i+y0 < 4510):
-                            gamma = g_p[i+y0,j,k]
-                        else:
-                            gamma = g_p[4509,j,k]
-                    
-                    nc = max(
-                        ( gamma*array[i,j] ** beta - no[j, k])
-                        / ( gamma*array[i,j] ** (beta - 1.0) + 1.0)
-                        * (1.0 - np.exp(-1 * alpha_p[k] * array[i,j] ** (1.0 - beta))),
-                        0.0) 
-                    no[j,k] += nc
-                
-                nr = no[j,k] * (1.0 - np.exp(-t / tr[k]))
-                array[i,j] += -1 * nc + nr
-                no[j,k] -= nr
-                
-                if array[i,j] < 0.01:
-                    array[i,j] = 0.0
 
-    return array
+  Returns
+  -------
+  array: ndarray
+    Output array.
+  """
+  array = image.copy() # we do a copy to preserve the input image
+  ydim, xdim = array.shape # full signal array we want to apply cdm for
+  kdim_p = cnt.shape[2]
 
-@njit(nogil=True, fastmath=True, cache=True, parallel=True)
+  # IMAGING (non-TDI) MODE
+  # Parallel direction
+  no = np.zeros((xdim, kdim_p))
+  alpha_p: np.ndarray = t * sigma * vth * fwc**beta / (2.0 * vg)
+  g_p: np.ndarray = 2.0 * cnt / fwc**beta
+  
+  for j in prange(xdim):
+    for i in range(ydim):
+        for k in range(kdim_p):
+        nc = 0.0
+        if array[i,j] > 0.01:
+          if (ci):
+            if (i+y0 < 4510):
+              gamma = g_p[4509,j,k] - g_p[i+y0,j,k]
+            else:
+              gamma = 0.
+          else:
+            if (i+y0 < 4510):
+              gamma = g_p[i+y0,j,k]
+            else:
+              gamma = g_p[4509,j,k]
+          nc = max(
+            ( gamma*array[i,j] ** beta - no[j, k])
+            / ( gamma*array[i,j] ** (beta - 1.0) + 1.0)
+            * (1.0 - np.exp(-1 * alpha_p[k] * array[i,j] ** (1.0 - beta))),
+            0.0) # Eq. 22 in Short et al (2013)
+          no[j,k] += nc
+        nr = no[j,k] * (1.0 - np.exp(-t / tr[k]))
+        array[i,j] += -1 * nc + nr
+        no[j,k] -= nr
+        if array[i,j] < 0.01:
+          array[i,j] = 0.0
+
+  return array
+
+@njit(nogil=True,fastmath=True,cache=True,parallel=True)
 def run_cdm_parallel_cumul_radial_poly(
     image: np.ndarray,
     colindex: np.ndarray,
@@ -113,40 +116,78 @@ def run_cdm_parallel_cumul_radial_poly(
     ci: bool = False
 ) -> np.ndarray:
     r"""
-    Run CDM in parallel direction while taking into account the trap distribution across the CCD.
+    Run :term:`CDM` in parallel direction while taking account the trap distribution across the CCD.
     Here the trap density is modelled on the basis of a polynomial model 
     varying as a function of the distance from the centre of the focal plane.
+    
+    Adapted from run_cdm_parallel() taken from Pyxel 1.10 (https://esa.gitlab.io/pyxel/).
+
+    Parameters
+    ----------
+    image: ndarray
+        Input image.
+    colindex: integer array
+        index of the columns provided in the input image
+    y0: int
+        location of the first row  in the CCD covered by input array (for instance y0=2000 means that the 
+        first row in the input array corresponds to CCD row of index 2000)
+    beta: float
+        Electron cloud expansion coefficient :math:`\beta`.
+    vg: float
+        Maximum geometrical volume :math:`V_g` that electrons can occupy within a pixel. Unit: :math:`cm^3`.
+    t: float
+        Transfer period :math:`t` (TDI period). Unit: :math:`s`.
+    fwc: float
+        Full well capacity :math:`FWC`. Unit: :math:`e^-`.
+    vth: float
+        Electron thermal velocity.
+    tr: sequence of float
+        Trap release time constants :math:`\tau_r`. Unit: :math:`s`.
+    a: ndarray (ns,deg+1)
+        Polynomial coefficients modelling the trap density as a function of the radius (from the 
+        optical centre, ns is the number of species and deg the degree of the polynomial function
+        The trap densiy is in  :math:`cm^{-3}``
+    xc,yc: (int,int)
+        positions of the principal point (in the CCD reference frame)
+    sigma: sequence of float
+        Trap capture cross section :math:`\sigma`. Unit: :math:`cm^2`.
+    ci: bool
+	    frame, the input frame assumed to contain CI and it is transferred into the CCD area.
+	    Default: False
+
+    Returns
+    -------
+    array: ndarray
+        Output array.
     """
-    array = image.copy()
-    ydim, xdim = array.shape 
+    array = image.copy() # we do a copy to preserve the input image
+    ydim, xdim = array.shape  # full signal array we want to apply cdm for
     kdim_p = a.shape[0] # number of species
 
     # IMAGING (non-TDI) MODE
     # Parallel direction
     no = np.zeros((xdim, kdim_p))
-    alpha_p = t * sigma * vth * fwc**beta / (2.0 * vg)
+    alpha_p: np.ndarray = t * sigma * vth * fwc**beta / (2.0 * vg)
 
-    # Derive the cumulated trap density
-    cnt = np.zeros((kdim_p, 4510, xdim)) 
+    #< derive the cumulated trap density (not computed for all the CCD rows)
+    cnt = np.zeros((kdim_p,4510,xdim)) # cumulated trap density
     Np = a.shape[1]
-    D = np.zeros((4510, xdim, Np))
-    
-    for i in prange(y0, 4510):
+    D = np.zeros((4510,xdim,Np))
+    for i in prange(y0,4510):
         for j in range(xdim):
-            RsqX = ((colindex[j] - xc) / 4510) ** 2 / 2.
+            RsqX = ((colindex[j]  - xc) / 4510) ** 2 / 2.
             for p in range(Np):
                 for ip in range(i+1):
-                    R = math.sqrt(RsqX + ((ip - yc) / 4510) ** 2 / 2.)
+                    R = math.sqrt(RsqX + ((ip - yc) / 4510) ** 2 /2.)
                     D[i,j,p] += R**p
-                    
-    for i in prange(y0, 4510):
+    for i in prange(y0,4510):
         for k in range(kdim_p):
             for j in range(xdim):
                 for p in range(Np):
-                    cnt[k,i,j] += a[k,p] * D[i,j,p]
+                    cnt[k,i,j] +=  a[k,p]*D[i,j,p]
+    #>
 
-    g_p = 2.0 * cnt / fwc**beta
-    
+    g_p: np.ndarray = 2.0 * cnt / fwc**beta
     for j in prange(xdim):
         for i in range(ydim):
             for k in range(kdim_p):
@@ -162,19 +203,17 @@ def run_cdm_parallel_cumul_radial_poly(
                             gamma = g_p[k,i+y0,j]
                         else:
                             gamma = g_p[k,4509,j]
-                    
                     nc = max(
                         ( gamma*array[i,j] ** beta - no[j,k])
-                        / ( gamma*array[i,j] ** (beta - 1.0) + 1.0)
+                        / (  gamma*array[i,j] ** (beta - 1.0) + 1.0)
                         * (1.0 - np.exp(-1 * alpha_p[k] * array[i,j] ** (1.0 - beta))),
-                        0.0) 
+                        0.0) # Eq. 22 in Short et al (2013)
                     no[j,k] += nc
-                
                 nr = no[j,k] * (1.0 - np.exp(-t/ tr[k]))
                 array[i,j] += -1 * nc + nr
                 no[j,k] -= nr
-                
                 if array[i,j] < 0.01:
                     array[i,j] = 0.0
 
     return array
+
