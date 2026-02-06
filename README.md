@@ -2,7 +2,7 @@
 
 This repository contains the Python implementation of the Charge Transfer Inefficiency (CTI) calibration and correction strategy for the **ESA PLATO Mission**, as described in the paper:
 
-> **Impact of Charge Transfer Inefficiency on transit light-curves: A correction strategy for PLATO** > *S. Mishra, R. Samadi, D. Bérard (2025)* > Astronomy & Astrophysics (A&A)  
+> **Impact of Charge Transfer Inefficiency on transit light-curves: A correction strategy for PLATO** > *S. Mishra, R. Samadi, D. Bérard (2026)* > Astronomy & Astrophysics (A&A)  
 > [Link to ArXiv](https://arxiv.org/abs/2510.22092) | [DOI](https://doi.org/10.48550/arXiv.2510.22092)
 
 ## Overview
@@ -31,14 +31,14 @@ The core logic is contained in cti_model.py. You can import the functions direct
 If you use this code in your research, please cite the paper:
 
 ```bibtex
-@article{mishra2025,
+@article{mishra2026,
   title   = {Impact of Charge Transfer Inefficiency on transit light-curves: A correction strategy for PLATO},
   author  = {Mishra, S. and Samadi, R. and Bérard, D.},
   journal = {Astronomy \& Astrophysics},
   eprint={2510.22092},
   archivePrefix={arXiv},
   primaryClass= [astro-ph.EP]
-  year    = {2025},
+  year    = {2026},
   note    = {In press}
 }
 ```
