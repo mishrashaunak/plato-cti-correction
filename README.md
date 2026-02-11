@@ -31,14 +31,12 @@ The core logic is contained in cti_model.py. You can import the functions direct
 If you use this code in your research, please cite the paper:
 
 ```bibtex
-@article{mishra2026,
-  title   = {Impact of Charge Transfer Inefficiency on transit light-curves: A correction strategy for PLATO},
-  author  = {Mishra, S. and Samadi, R. and Bérard, D.},
-  journal = {Astronomy \& Astrophysics},
-  eprint={2510.22092},
-  archivePrefix={arXiv},
-  primaryClass= [astro-ph.EP]
-  year    = {2026},
-  note    = {In press}
+@article{Mishra2026,
+	author = {{Mishra, S.} and {Samadi, R.} and {Bérard, D.}},
+	title = {Impact of charge transfer inefficiency on transit light curves. A correction strategy for PLATO},
+	DOI= "10.1051/0004-6361/202557037",
+	url= "https://doi.org/10.1051/0004-6361/202557037",
+	journal = {A&A},
+	year = 2026,
 }
 ```
